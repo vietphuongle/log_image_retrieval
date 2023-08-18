@@ -29,15 +29,7 @@ def image_to_embedding(image_path, model):
     embedding_vector = model.predict(img)[0]
     #embedding_vector /= np.linalg.norm(embedding_vector)
     return embedding_vector
-
-def extract_name(filename):
-    base = os.path.basename(filename)
-    last_underscore_index = base.rfind('_')
-    if last_underscore_index != -1:
-        return base[:last_underscore_index]
-    else:
-        return base
-
+    
 left_images = [str(left_images_path / f) for f in os.listdir(left_images_path)]
 right_images = [str(right_images_path / f) for f in os.listdir(right_images_path)]
 
@@ -49,9 +41,6 @@ for image_path in right_images:
 
 
 left_image_path = sys.argv[1]
-left_image_label = extract_name(left_image_path)
-
-print(left_image_path)
 
 query_embedding = image_to_embedding(left_image_path, model)
 
