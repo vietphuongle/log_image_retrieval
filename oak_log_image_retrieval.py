@@ -17,11 +17,9 @@ import pickle
 
 target_shape = (200, 200)
 
-data_path = Path('oak_log_dataset')
-left_images_path = data_path / "query_images"
-right_images_path = data_path / "log_images"
+path = ''
 
-model = load_model('embedding_256_2813_30_100.h5')
+model = load_model(path + 'embedding_256_2813_30_100.h5')
 
 def image_to_embedding(image_path, model):
     img = Image.open(image_path)
@@ -32,20 +30,16 @@ def image_to_embedding(image_path, model):
     embedding_vector = model.predict(img)[0]
     #embedding_vector /= np.linalg.norm(embedding_vector)
     return embedding_vector
-    
-left_images = [str(left_images_path / f) for f in os.listdir(left_images_path)]
-right_images = [str(right_images_path / f) for f in os.listdir(right_images_path)]
 
 image_embeddings = {}
-for image_path in right_images:
-    embedding_vector = image_to_embedding(image_path, model)
-    image_embeddings[image_path] = embedding_vector
+# Load image_embeddings from the file
+with open(path+'image_embeddings_256_2831_30_100.pkl', 'rb') as f:
+    image_embeddings = pickle.load(f)
 
+query_image_path = sys.argv[1]
+#query_image_path = path + 'oak_log_dataset/left/LR230021735_12742_R4.jpg'
 
-
-left_image_path = sys.argv[1]
-
-query_embedding = image_to_embedding(left_image_path, model)
+query_embedding = image_to_embedding(query_image_path, model)
 
 similar_images = []
 for image_path, embedding in image_embeddings.items():
@@ -57,7 +51,7 @@ similar_images.sort(key=lambda x: x[1])
 limited_distance = similar_images[0][1] / 0.6
 
 good_similar_images =[]
-print(limited_distance)
+
 for i in range(len(similar_images)):
     if similar_images[i][1] <= limited_distance:
         good_similar_images.append(similar_images[i][0])
@@ -165,7 +159,7 @@ def matching(log, image):
 
 logs = []
 read_logs()
-image = read_image(left_image_path)
+image = read_image(query_image_path)
 
 found = False
 best_rs = -1
@@ -180,10 +174,9 @@ for l in range(len(logs)):
         found = True
 
 if found:
-    print("The query image " + left_image_path)
+    print("The query image " + query_image_path)
     print(" match with " + logs[p].name)
 else:
     print("The query image does not match with any log.")
 
 print("Finished")
-
