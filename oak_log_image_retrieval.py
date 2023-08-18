@@ -12,11 +12,13 @@ import sys
 import numpy as np
 import cv2
 
+################## phase 1 ####################
+
 target_shape = (200, 200)
 
 data_path = Path('oak_log_dataset')
-left_images_path = data_path / "left"
-right_images_path = data_path / "right"
+left_images_path = data_path / "query_images"
+right_images_path = data_path / "log_images"
 
 model = load_model('embedding_256_2813_30_100.h5')
 
@@ -60,6 +62,8 @@ for i in range(len(similar_images)):
         good_similar_images.append(similar_images[i][0])
     else:
         break
+
+################## phase 2 ####################
 
 class Element:
     def __init__(self, filename):
