@@ -8,6 +8,6 @@ https://drive.google.com/file/d/1VfxN7Fv49j1J0fUXNkIQvt9WM1xKND2s/view?usp=share
 
 $python3 oak_log_image_retrieval.py <path/to/a/query/image>
 
-## Examole
+## Example
 
 $python3 oak_log_image_retrieval.py oak_log_dataset/query_images/LR230021735_12742_R4.jpg
