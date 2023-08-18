@@ -48,7 +48,7 @@ for image_path in right_images:
 
 
 
-left_image_path = '/content/drive/MyDrive/oak_log_dataset/left/LR230021735_12742_R4.jpg'
+left_image_path = sys.argv[1]
 left_image_label = extract_name(left_image_path)
 
 print(left_image_path)
