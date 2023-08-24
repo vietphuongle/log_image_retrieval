@@ -1,11 +1,5 @@
-import matplotlib.pyplot as plt
 from PIL import Image
-import numpy as np
 import os
-import random
-import tensorflow as tf
-from pathlib import Path
-from tensorflow.keras import applications
 from tensorflow.keras.applications.resnet50 import preprocess_input
 from tensorflow.keras.models import load_model
 import sys
@@ -16,9 +10,7 @@ import pickle
 ################## phase 1 ####################
 
 target_shape = (200, 200)
-
 path = ''
-
 model = load_model(path + 'embedding_256_2813_30_100.h5')
 
 def image_to_embedding(image_path, model):
@@ -31,32 +23,31 @@ def image_to_embedding(image_path, model):
     #embedding_vector /= np.linalg.norm(embedding_vector)
     return embedding_vector
 
-image_embeddings = {}
+log_embeddings = {}
 # Load image_embeddings from the file
 with open(path+'image_embeddings_256_2831_30_100.pkl', 'rb') as f:
-    image_embeddings = pickle.load(f)
+    log_embeddings = pickle.load(f)
 
-query_image_path = sys.argv[1]
-#query_image_path = path + 'oak_log_dataset/left/LR230021735_12742_R4.jpg'
+def image_retrieval(query_image_path):
+    query_embedding = image_to_embedding(query_image_path, model)
+    similar_images = []
+    for image_path, embedding in log_embeddings.items():
+        distance = np.linalg.norm(embedding - query_embedding)
+        similar_images.append((image_path, distance))
 
-query_embedding = image_to_embedding(query_image_path, model)
+    similar_images.sort(key=lambda x: x[1])
 
-similar_images = []
-for image_path, embedding in image_embeddings.items():
-    distance = np.linalg.norm(embedding - query_embedding)
-    similar_images.append((image_path, distance))
+    limited_distance = similar_images[0][1] / 0.6
 
-similar_images.sort(key=lambda x: x[1])
+    good_similar_images =[]
 
-limited_distance = similar_images[0][1] / 0.6
+    for i in range(len(similar_images)):
+        if similar_images[i][1] <= limited_distance:
+            good_similar_images.append(similar_images[i][0])
+        else:
+            break
 
-good_similar_images =[]
-
-for i in range(len(similar_images)):
-    if similar_images[i][1] <= limited_distance:
-        good_similar_images.append(similar_images[i][0])
-    else:
-        break
+    return good_similar_images
 
 ################## phase 2 ####################
 
@@ -67,21 +58,72 @@ class Element:
         self.descriptors = []
         self.label = ''
         self.name = filename
-        #self.filedataname = os.path.splitext(self.name)[0] + '.yaml'
-
+        self.file_data_name = os.path.splitext(self.name)[0] + '.pkl'
     def keypoint_extraction(self):
         img = cv2.imread(self.name, cv2.IMREAD_GRAYSCALE)
         self.image = cv2.resize(img, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_LINEAR)
         detector = cv2.SIFT_create()
         self.keypoints, self.descriptors = detector.detectAndCompute(self.image, None)
 
-def read_logs():
+    def read_keypoint_extraction(self):
+        # Check if keypoints and descriptors exist in the saved file
+        if os.path.exists(self.file_data_name):
+            with open(self.file_data_name, 'rb') as file:
+                data = pickle.load(file)
+                self.image = cv2.cvtColor(
+                    cv2.resize(
+                        np.array(data['image'], dtype=np.uint8),
+                        None, fx=2, fy=2, interpolation=cv2.INTER_LINEAR
+                    ),
+                    cv2.COLOR_GRAY2BGR
+                )
+                self.keypoints = [cv2.KeyPoint(pt[0], pt[1], 1) for pt in data['keypoints']]
+                self.descriptors = np.array(data['descriptors'], dtype=np.float32)
+                self.label = data['label']
+        else:
+            img = cv2.imread(self.name, cv2.IMREAD_GRAYSCALE)
+            self.image = cv2.resize(img, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_LINEAR)
+            detector = cv2.SIFT_create()
+            self.keypoints, self.descriptors = detector.detectAndCompute(self.image, None)
+
+            # Save the extracted keypoints and descriptors
+            self.save()
+
+    def save(self):
+        data = {
+            'image': self.image.tolist(),
+            'keypoints': [kp.pt for kp in self.keypoints],
+            'descriptors': self.descriptors.tolist(),
+            'label': self.label,
+            'name': self.name
+        }
+        with open(self.file_data_name, 'wb') as file:
+            pickle.dump(data, file)
+
+    @staticmethod
+    def load(filename):
+        with open(filename, 'rb') as file:
+            data = pickle.load(file)
+            element = Element(data['name'])
+            element.image = cv2.cvtColor(
+                cv2.resize(
+                    np.array(data['image'], dtype=np.uint8),
+                    None, fx=2, fy=2, interpolation=cv2.INTER_LINEAR
+                ),
+                cv2.COLOR_GRAY2BGR
+            )
+            element.keypoints = [cv2.KeyPoint(pt[0], pt[1], 1) for pt in data['keypoints']]
+            element.descriptors = np.array(data['descriptors'], dtype=np.float32)
+            element.label = data['label']
+            return element
+
+def read_logs(file_list):
     # Read logs
     #print(nb_logs)
-    for log_name in good_similar_images:
+    for log_name in file_list:
         #print(log_name)
         e = Element(str(log_name))
-        e.keypoint_extraction()
+        e.read_keypoint_extraction()
         logs.append(e)
         #print(log_name,'->',len(logs[len(logs)-1].keypoints))
 
@@ -113,10 +155,6 @@ def is_nearly_rectangle(corners, angle_threshold):
 
     return True
 
-
-def euclidean_distance(p1, p2):
-    return np.linalg.norm(p1 - p2)
-
 def matching(log, image):
     # Matching keypoints
     matcher = cv2.DescriptorMatcher_create(cv2.DescriptorMatcher_FLANNBASED)
@@ -146,7 +184,6 @@ def matching(log, image):
 
     # Checking the bounding box is a nearly rectangle
     if not is_nearly_rectangle(image_corners, 20):
-        # print("reject by isNearlyRectangle")
         return 0.0, None, None
 
     # Filtering inlier matches
@@ -157,14 +194,23 @@ def matching(log, image):
 
     return len(inlier_matches) / len(log.descriptors), inlier_matches, H
 
+def compare_label(path1, path2):
+    filename1 = os.path.basename(path1)
+    filename2 = os.path.basename(path2)
+    filename1 = filename1.rsplit('_',1)[0]
+    filename2 = filename2.rsplit('_',1)[0]
+    return filename1 == filename2
+
+query_image_path = sys.argv[1]
+
 logs = []
-read_logs()
+image_retrieval_list = image_retrieval(query_image_path)
+read_logs(image_retrieval_list)
 image = read_image(query_image_path)
 
 found = False
 best_rs = -1
 p = -1
-
 for l in range(len(logs)):
     r, good_matches, H = matching(logs[l], image)
     if r >= 0.0005:
@@ -174,9 +220,12 @@ for l in range(len(logs)):
         found = True
 
 if found:
-    print("The query image " + query_image_path)
-    print(" match with " + logs[p].name)
+    print("The query image " + query_image_path + " match with " + logs[p].name)
+    if compare_label(query_image_path,logs[p].name):
+        print('=> CORRECT MATCHING')
+    else:
+        print('=> incorrect matching')
 else:
-    print("The query image does not match with any log.")
+    print("The query image " + query_image_path + " does not match with any log.")
 
 print("Finished")
